@@ -1,35 +1,42 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import os
-
-TOKEN = os.getenv("BOT_TOKEN")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Bot is online 🚀")
-
-app = ApplicationBuilder().token(TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-
-app.run_polling()
+import asyncio
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from playwright.async_api import async_playwright
 
-# 1. This is how you write functions now (must have 'async' and 'await')
+# Setup Logging to see errors in Railway
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+# 1. Start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text="Zealy Sniper Bot is active! Use /set_proof to add links."
-    )
+    await update.message.reply_text("✅ Zealy Sniper is online! Send /claim to test.")
+
+# 2. Test Claim (To check if Playwright works)
+async def test_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔍 Testing browser...")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto("https://zealy.io")
+            title = await page.title()
+            await update.message.reply_text(f"🌐 Success! Reached Zealy. Page title: {title}")
+            await browser.close()
+    except Exception as e:
+        await update.message.reply_text(f"❌ Browser Error: {str(e)}")
 
 if __name__ == '__main__':
-    # 2. This is the new way to build the bot
-    application = ApplicationBuilder().token("YOUR_BOT_TOKEN_HERE").build()
+    # Grab the token from Railway Variables
+    TOKEN = os.getenv('TOKEN')
     
-    # 3. Add your commands
-    start_handler = CommandHandler('start', start)
-    application.add_handler(start_handler)
-    
-    # 4. Start the bot
-    application.run_polling()
+    if not TOKEN:
+        print("❌ ERROR: No TOKEN found in Railway Variables!")
+    else:
+        app = ApplicationBuilder().token(TOKEN).build()
+        
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("claim", test_claim))
+        
+        print("🚀 Bot is starting...")
+        app.run_polling()
