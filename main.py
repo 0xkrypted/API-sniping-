@@ -25,6 +25,8 @@ async def test_claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await browser.close()
     except Exception as e:
         await update.message.reply_text(f"❌ Browser Error: {str(e)}")
+    # This helps Railway know the bot is alive
+    port = int(os.environ.get("PORT", 8443))
 
 if __name__ == '__main__':
     # Grab the token from Railway Variables
