@@ -136,10 +136,16 @@ if __name__ == "__main__":
     else:
         app = ApplicationBuilder().token(TOKEN).build()
         
+        # Existing Handlers
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("token", set_token))
         app.add_handler(CommandHandler("load", load_task))
         app.add_handler(CommandHandler("fire", manual_fire))
+
+        # --- NEW HANDLERS START HERE ---
+        app.add_handler(CommandHandler("remove", remove_task))
+        app.add_handler(CommandHandler("list", list_tasks))
+        # --- NEW HANDLERS END HERE ---
 
         print("⚡ Bot starting...")
         
