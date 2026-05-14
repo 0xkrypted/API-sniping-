@@ -103,7 +103,6 @@ async def load_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def manual_fire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔫 Manual trigger pulled. Sniping now...")
     try:
-        # We pass 'update' here so the function can talk back to you
         await fire_sniper(update)
         await update.message.reply_text("🏁 Manual check complete.")
     except Exception as e:
@@ -116,8 +115,6 @@ async def remove_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     target_project = context.args[0]
     vault = load_vault()
-    
-    # Filter the list: Keep everything EXCEPT the project we want to delete
     original_count = len(vault["tasks"])
     vault["tasks"] = [t for t in vault["tasks"] if t["project"] != target_project]
     
@@ -126,6 +123,18 @@ async def remove_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🗑️ Removed {target_project} from the sniper list.")
     else:
         await update.message.reply_text(f"❓ Could not find project: {target_project}")
+
+# --- MISSING FUNCTION ADDED HERE ---
+async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    vault = load_vault()
+    if not vault["tasks"]:
+        await update.message.reply_text("📭 The vault is currently empty.")
+        return
+    
+    msg = "🎯 **Active Snipes:**\n"
+    for t in vault["tasks"]:
+        msg += f"• {t['project']} (ID: {t['quest_id']})\n"
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 # --- MAIN ENTRY POINT ---
 if __name__ == "__main__":
@@ -136,16 +145,12 @@ if __name__ == "__main__":
     else:
         app = ApplicationBuilder().token(TOKEN).build()
         
-        # Existing Handlers
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("token", set_token))
         app.add_handler(CommandHandler("load", load_task))
         app.add_handler(CommandHandler("fire", manual_fire))
-
-        # --- NEW HANDLERS START HERE ---
         app.add_handler(CommandHandler("remove", remove_task))
         app.add_handler(CommandHandler("list", list_tasks))
-        # --- NEW HANDLERS END HERE ---
 
         print("⚡ Bot starting...")
         
