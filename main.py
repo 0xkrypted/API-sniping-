@@ -1,19 +1,21 @@
 import asyncio
 import json
 import os
-from datetime import datetime, time
+from datetime import datetime
 import httpx
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # --- CONFIGURATION ---
-# The bot saves data here so it doesn't get lost when the server restarts
 VAULT_FILE = "vault.json"
 
 def load_vault():
     if os.path.exists(VAULT_FILE):
         with open(VAULT_FILE, "r") as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except:
+                return {"token": "", "tasks": []}
     return {"token": "", "tasks": []}
 
 def save_vault(data):
@@ -21,10 +23,13 @@ def save_vault(data):
         json.dump(data, f, indent=4)
 
 # --- ZEALY SNIPER LOGIC ---
-async def fire_sniper():
+async def fire_sniper(update: Update = None):
     vault = load_vault()
     if not vault["token"] or not vault["tasks"]:
-        print("❌ Sniper aborted: No token or tasks found in vault.")
+        msg = "❌ Sniper aborted: No token or tasks found in vault."
+        print(msg)
+        if update:
+            await update.message.reply_text(msg)
         return
 
     headers = {
@@ -42,31 +47,32 @@ async def fire_sniper():
             url = f"https://api.zealy.io/communities/{project}/quests/{quest_id}/claim"
             payload = {"proof": proof}
 
-            # RETRY LOOP: Tries 3 times if there is a network error
             for attempt in range(3):
                 try:
                     print(f"🚀 [Attempt {attempt+1}] Sniping {project}...")
                     response = await client.post(url, headers=headers, json=payload)
-                    print(f"🎯 {project} Status: {response.status_code}")
+                    status = response.status_code
+                    print(f"🎯 {project} Status: {status}")
                     
-                    if response.status_code == 200 or response.status_code == 400:
-                        break # Success or already claimed, stop retrying
+                    if update:
+                        await update.message.reply_text(f"📡 {project} Result: Status {status}")
+
+                    if status == 200 or status == 400:
+                        break 
                 except Exception as e:
                     print(f"⚠️ Connection error on attempt {attempt+1}: {e}")
-                    await asyncio.sleep(2) # Wait 2 seconds before trying again
+                    await asyncio.sleep(2)
 
 # --- BACKGROUND SCHEDULER ---
 async def run_scheduler():
     print("⏰ Scheduler active. Monitoring for 12 AM UTC...")
     while True:
         now = datetime.utcnow().time()
-        # Checks if it is exactly 12:00 AM UTC (1:00 AM Nigeria)
+        # 12:00 AM UTC is 1:00 AM Nigeria Time
         if now.hour == 0 and now.minute == 0 and now.second == 0:
             print("🚨 12 AM UTC Detected! Firing Sniper...")
             await fire_sniper()
-            await asyncio.sleep(60) # Don't fire twice in the same minute
-        
-        # Heartbeat: Keeps the server from idling
+            await asyncio.sleep(60) 
         await asyncio.sleep(1)
 
 # --- TELEGRAM COMMANDS ---
@@ -96,25 +102,30 @@ async def load_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def manual_fire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔫 Manual trigger pulled. Sniping now...")
-    await fire_sniper()
-    await update.message.reply_text("🏁 Manual check complete. Check Railway logs for status.")
+    try:
+        # We pass 'update' here so the function can talk back to you
+        await fire_sniper(update)
+        await update.message.reply_text("🏁 Manual check complete.")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Crash Error: {e}")
 
 # --- MAIN ENTRY POINT ---
 if __name__ == "__main__":
-    # Get your Token from Railway Environment Variables
     TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     
-    app = ApplicationBuilder().token(TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("token", set_token))
-    app.add_handler(CommandHandler("load", load_task))
-    app.add_handler(CommandHandler("fire", manual_fire))
+    if not TOKEN:
+        print("❌ ERROR: TELEGRAM_BOT_TOKEN environment variable not found!")
+    else:
+        app = ApplicationBuilder().token(TOKEN).build()
+        
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("token", set_token))
+        app.add_handler(CommandHandler("load", load_task))
+        app.add_handler(CommandHandler("fire", manual_fire))
 
-    print("⚡ Bot starting...")
-    
-    # Start the 1 AM scheduler in the background
-    loop = asyncio.get_event_loop()
-    loop.create_task(run_scheduler())
-    
-    app.run_polling()
+        print("⚡ Bot starting...")
+        
+        loop = asyncio.get_event_loop()
+        loop.create_task(run_scheduler())
+        
+        app.run_polling()
