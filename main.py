@@ -109,6 +109,24 @@ async def manual_fire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Crash Error: {e}")
 
+async def remove_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ Usage: /remove [project_name]")
+        return
+    
+    target_project = context.args[0]
+    vault = load_vault()
+    
+    # Filter the list: Keep everything EXCEPT the project we want to delete
+    original_count = len(vault["tasks"])
+    vault["tasks"] = [t for t in vault["tasks"] if t["project"] != target_project]
+    
+    if len(vault["tasks"]) < original_count:
+        save_vault(vault)
+        await update.message.reply_text(f"🗑️ Removed {target_project} from the sniper list.")
+    else:
+        await update.message.reply_text(f"❓ Could not find project: {target_project}")
+
 # --- MAIN ENTRY POINT ---
 if __name__ == "__main__":
     TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
