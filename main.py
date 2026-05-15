@@ -41,7 +41,7 @@ def zealy_snipe_upload(api_token, file_path):
 
 # 2. THE TELEGRAM COMMAND
 # Replace your existing /load command with this
-bot = telebot.TeleBot("YOUR_TELEGRAM_BOT_TOKEN")
+bot = telebot.TeleBot("5492294313:AAFgr1XxjID0WWtaUTgccYy_eTSrRSQT1Yk")
 
 @bot.message_handler(commands=['load'])
 def load_task(message):
@@ -56,7 +56,10 @@ def load_task(message):
     
     # You should have your token saved in Railway environment variables
     # or replace this string with your actual token
-    zealy_token = "YOUR_ZEALY_SESSION_TOKEN_HERE" 
+    zealy_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJiNTg5MDA0ZS1hY2YzLTRmMWMtOTQ2OC02M
+WJhYmUwZWZkN2IiLCJhY2NvdW50VHIwZSI6ImVtYWlsIiwiaW1haWwiOiJjnlwdGVkNDA0QGdtYWlsLmN
+vbSIsImxhc3RFbWFpbENoZWNrljoxNzc4NjE4MjIxOTE5LCIpYXQiOjE3Nzg2MTgyMjEsImV4cCI6MTc4MTIx
+MDIyMX0.dsTMCV_v3-nTf8ivkFJIdQcP2VX9pfixzRxTaPRm3nk" 
 
     bot.send_message(message.chat.id, f"🚀 Sniping Task: `{task_id}`...")
 
