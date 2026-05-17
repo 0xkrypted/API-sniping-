@@ -24,10 +24,14 @@ def save_vault(data):
 
 # --- DIRECT S3 UPLOAD ENGINE ---
 async def zealy_snipe_upload(client, api_token, file_path):
-    # Converts a standard API token into the header Zealy wants
+    # Upgraded to match genuine browser parameters
     headers = {
         "x-api-key": api_token,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-NG,en;q=0.9,en-US;q=0.8",
+        "Origin": "https://zealy.io",
+        "Referer": "https://zealy.io/",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
     }
     try:
         # A. Handshake: Requesting the S3 upload slot
@@ -70,11 +74,16 @@ async def fire_sniper(update: Update = None):
             await update.message.reply_text(msg)
         return
 
-    # Keep your original authorization header fallback
+    # UPDATED: Replaced basic credentials with anti-bot mobile bypass signatures
     headers = {
         "Authorization": f"Bearer {vault['token']}",
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-NG,en;q=0.9,en-US;q=0.8",
+        "Origin": "https://zealy.io",
+        "Referer": "https://zealy.io/",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest"
     }
 
     async with httpx.AsyncClient(timeout=15.0) as client:
