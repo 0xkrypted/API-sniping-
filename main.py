@@ -64,7 +64,7 @@ async def zealy_snipe_upload(client, api_token, file_path):
     except Exception as e:
         return None, str(e)
 
-# --- ZEALY SNIPER LOGIC ---
+# --- ZEALY SNIPER LOGIC (UPGRADED FOR ABSOLUTE API PATHS) ---
 async def fire_sniper(update: Update = None):
     vault = load_vault()
     if not vault["token"] or not vault["tasks"]:
@@ -73,6 +73,60 @@ async def fire_sniper(update: Update = None):
         if update:
             await update.message.reply_text(msg)
         return
+
+    headers = {
+        "Authorization": f"Bearer {vault['token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-NG,en;q=0.9,en-US;q=0.8",
+        "Origin": "https://zealy.io",
+        "Referer": "https://zealy.io/",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for task in vault["tasks"]:
+            project = task["project"]
+            quest_id = task["quest_id"]
+            proof = task["proof"]
+            
+            # UPGRADE: If project starts with http, use it directly as an absolute URL bypass
+            if project.startswith("http"):
+                url = project
+                display_name = "Absolute API Target"
+            else:
+                url = f"https://api.zealy.io/communities/{project}/quests/{quest_id}/claim"
+                display_name = project
+            
+            if proof.lower() == "photo":
+                if update:
+                    await update.message.reply_text(f"📸 Generating S3 upload...")
+                img_url, status = await zealy_snipe_upload(client, vault["token"], "proof.png")
+                if img_url:
+                    payload = {"type": "upload", "value": img_url}
+                else:
+                    if update: await update.message.reply_text(f"❌ S3 Engine Error: {status}")
+                    continue
+            else:
+                payload = {"proof": proof}
+
+            for attempt in range(3):
+                try:
+                    print(f"🚀 [Attempt {attempt+1}] Sniping {display_name}...")
+                    response = await client.post(url, headers=headers, json=payload)
+                    status = response.status_code
+                    print(f"🎯 {display_name} Status: {status}")
+                    
+                    if update:
+                        await update.message.reply_text(f"📡 Result: Status {status}")
+
+                    if status == 200 or status == 400:
+                        break 
+                except Exception as e:
+                    print(f"⚠️ Connection error: {e}")
+                    await asyncio.sleep(2)
+
 
     # UPDATED: Replaced basic credentials with anti-bot mobile bypass signatures
     headers = {
