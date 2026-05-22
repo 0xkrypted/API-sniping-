@@ -38,15 +38,23 @@ def build_headers(cookie_string):
 def build_payload(task_type, task_id, value=None):
     """
     task_type options:
-      visitLink   - just visit a link, no value needed
-      url         - submit a link (Twitter reply, website link, etc.)
-      text        - submit a word or sentence
-      file        - submit a photo (value = s3 image url)
-      discord     - discord join verification, no value needed
+      visitLink    - just visit a link, no value needed
+      url          - submit a link (Twitter reply, website link, etc.)
+      text         - submit a word or sentence
+      file         - submit a photo (value = s3 image url — uses fileUrls array)
+      discordServer - discord join verification, no value needed
     """
     entry = {"taskId": task_id, "type": task_type}
-    if value:
-        entry["value"] = value
+
+    if task_type == "file":
+        # Zealy expects fileUrls as an ARRAY, not a single value field
+        entry["fileUrls"] = [value] if value else []
+
+    elif task_type in ["url", "text"]:
+        if value:
+            entry["value"] = value
+
+    # visitLink and discordServer need no extra fields
     return {"taskValues": [entry]}
 
 # --- S3 PHOTO UPLOAD ---
@@ -148,8 +156,11 @@ async def fire_sniper(update: Update = None):
                     print(f"📡 {project} → Status {status_code} | Response: {resp_json}")
 
                     # Interpret result
-                    if status_code == 200 and resp_json.get("status") == "success":
+                    resp_status = resp_json.get("status", "")
+                    if status_code == 200 and resp_status == "success":
                         msg = f"✅ {project} claimed successfully!"
+                    elif status_code == 200 and resp_status == "inReview":
+                        msg = f"📋 {project} submitted and is in review. A moderator will approve your photo shortly."
                     elif status_code == 400:
                         msg = f"⚠️ {project}: Already claimed or invalid request.\nDetails: {resp_json}"
                     elif status_code == 401:
@@ -244,7 +255,7 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/add granawin abc-123 def-456 visitLink\n"
             "/add granawin abc-123 def-456 url https://twitter.com/yourtweet\n"
             "/add granawin abc-123 def-456 text WAGMI\n"
-            "/add granawin abc-123 def-456 discord\n"
+            "/add granawin abc-123 def-456 discordServer\n"
             "/add granawin abc-123 def-456 file proof.png\n\n"
             "Use /help to learn all task types."
         )
@@ -256,7 +267,7 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_type = args[3] if len(args) > 3 else "visitLink"
     value     = args[4] if len(args) > 4 else None
 
-    valid_types = ["visitLink", "url", "text", "file", "discord"]
+    valid_types = ["visitLink", "url", "text", "file", "discordServer"]
     if task_type not in valid_types:
         await update.message.reply_text(
             f"❌ Invalid task type: {task_type}\n"
@@ -358,9 +369,9 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*text* — Task where you type a word or phrase\n"
         "Value = the word or answer\n"
         "`/add projectname questid taskid text WAGMI`\n\n"
-        "*discord* — Task verified by your connected Discord\n"
+        "*discordServer* — Task verified by your connected Discord\n"
         "No value needed\n"
-        "`/add projectname questid taskid discord`\n\n"
+        "`/add projectname questid taskid discordServer`\n\n"
         "*file* — Task where you submit a photo as proof\n"
         "Value = filename (e.g. proof.png)\n"
         "`/add projectname questid taskid file proof.png`\n\n"
