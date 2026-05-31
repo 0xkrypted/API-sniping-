@@ -87,7 +87,7 @@ async def upload_photo(cookie_string, file_path):
     headers = build_headers(cookie_string)
     try:
         async with httpx.AsyncClient(timeout=15.0, proxy=PROXY_URL) as client:
-                payload = {"fileName": "proof.png"}
+            payload = {"fileName": "proof.png"}
             res = await client.post("https://api-v1.zealy.io/files", headers=headers, json=payload)
 
             if res.status_code != 200:
