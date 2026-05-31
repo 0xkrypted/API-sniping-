@@ -9,6 +9,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 # --- CONFIGURATION ---
 VAULT_FILE = "vault.json"
 
+# --- PROXY CONFIGURATION ---
+PROXY_URL = "http://lecopvxg:pku368jcdirl@38.154.203.95:5863"
+
 def load_vault():
     if os.path.exists(VAULT_FILE):
         with open(VAULT_FILE, "r") as f:
@@ -22,17 +25,39 @@ def save_vault(data):
     with open(VAULT_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-# --- BUILD HEADERS (uses full cookie) ---
-def build_headers(cookie_string):
-    return {
-        "Cookie": cookie_string,
+# --- EXTRACT JWT TOKEN FROM COOKIE STRING ---
+def extract_jwt(cookie_string):
+    for part in cookie_string.split(";"):
+        part = part.strip()
+        if part.startswith("access_token="):
+            return part[len("access_token="):]
+    return None
+
+# --- BUILD HEADERS (uses full cookie + Authorization Bearer) ---
+def build_headers(cookie_string, subdomain=None):
+    # Send only access_token as cookie (confirmed working method)
+    jwt = extract_jwt(cookie_string)
+    cookie_value = f"access_token={jwt}" if jwt else cookie_string
+
+    headers = {
+        "Cookie": cookie_value,
         "Content-Type": "application/json",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-NG,en-GB;q=0.9,en-US;q=0.8,en;q=0.7",
         "Origin": "https://zealy.io",
         "Referer": "https://zealy.io/",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+        "Sec-Ch-Ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Linux"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
     }
+    jwt = extract_jwt(cookie_string)
+    if jwt:
+        headers["Authorization"] = f"Bearer {jwt}"
+    return headers
 
 # --- BUILD PAYLOAD based on task type ---
 def build_payload(task_type, task_id, value=None):
@@ -58,37 +83,37 @@ def build_payload(task_type, task_id, value=None):
     return {"taskValues": [entry]}
 
 # --- S3 PHOTO UPLOAD ---
-async def upload_photo(client, cookie_string, file_path):
+async def upload_photo(cookie_string, file_path):
     headers = build_headers(cookie_string)
-    # Use x-api-key style for file upload endpoint
     try:
-        payload = {"fileName": "proof.png"}
-        res = await client.post("https://api-v1.zealy.io/files", headers=headers, json=payload)
+        async with httpx.AsyncClient(timeout=15.0, proxy=PROXY_URL) as client:
+                payload = {"fileName": "proof.png"}
+            res = await client.post("https://api-v1.zealy.io/files", headers=headers, json=payload)
 
-        if res.status_code != 200:
-            return None, f"Upload handshake failed (Status {res.status_code}): {res.text}"
+            if res.status_code != 200:
+                return None, f"Upload handshake failed (Status {res.status_code}): {res.text}"
 
-        data = res.json()
-        upload_url = data.get('uploadUrl')
-        permanent_url = data.get('fileUrl')
+            data = res.json()
+            upload_url = data.get('uploadUrl')
+            permanent_url = data.get('fileUrl')
 
-        if not upload_url or not permanent_url:
-            return None, f"Missing upload URLs in response: {data}"
+            if not upload_url or not permanent_url:
+                return None, f"Missing upload URLs in response: {data}"
 
-        if not os.path.exists(file_path):
-            return None, f"Photo file not found at path: {file_path}"
+            if not os.path.exists(file_path):
+                return None, f"Photo file not found at path: {file_path}"
 
-        with open(file_path, 'rb') as f:
-            upload_res = await client.put(
-                upload_url,
-                content=f.read(),
-                headers={'Content-Type': 'image/png'}
-            )
+            with open(file_path, 'rb') as f:
+                upload_res = await client.put(
+                    upload_url,
+                    content=f.read(),
+                    headers={'Content-Type': 'image/png'}
+                )
 
-        if upload_res.status_code in [200, 201]:
-            return permanent_url, "Success"
-        else:
-            return None, f"S3 upload failed (Status {upload_res.status_code})"
+            if upload_res.status_code in [200, 201]:
+                return permanent_url, "Success"
+            else:
+                return None, f"S3 upload failed (Status {upload_res.status_code})"
 
     except Exception as e:
         return None, f"Photo upload error: {str(e)}"
@@ -112,9 +137,10 @@ async def fire_sniper(update: Update = None):
         return
 
     cookie = vault["cookie"]
-    headers = build_headers(cookie)
+    # headers built per-task with subdomain
+    base_cookie = cookie
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=15.0, proxy=PROXY_URL) as client:
         for task in vault["tasks"]:
             project   = task["project"]     # e.g. granawin
             quest_id  = task["quest_id"]    # quest UUID
@@ -123,13 +149,14 @@ async def fire_sniper(update: Update = None):
             value     = task.get("value")   # optional value
 
             url = f"https://api-v1.zealy.io/communities/{project}/quests/v2/{quest_id}/claim"
+            headers = build_headers(base_cookie, subdomain=project)
 
             # Handle photo upload separately
             if task_type == "file":
                 photo_path = value if value else "proof.png"
                 if update:
                     await update.message.reply_text(f"📸 Uploading photo for {project}...")
-                img_url, status = await upload_photo(client, cookie, photo_path)
+                img_url, status = await upload_photo(cookie, photo_path)
                 if img_url:
                     payload = build_payload("file", task_id, img_url)
                 else:
